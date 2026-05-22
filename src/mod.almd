@@ -1,0 +1,108 @@
+import json
+
+// Minecraft Registry: ID ↔ name mapping for blocks, items, entities, etc.
+//
+// Usage:
+//   import registry
+//   let reg = registry.new()
+//   let reg = registry.register(reg, "block", 1, "minecraft:stone")
+//   let name = registry.name_of(reg, "block", 1)  // some("minecraft:stone")
+
+type Registry = {
+  entries: Map[String, Map[Int, String]],
+  reverse: Map[String, Map[String, Int]],
+}
+
+fn new() -> Registry = { entries: map.new(), reverse: map.new() }
+
+fn register(reg: Registry, category: String, id: Int, name: String) -> Registry = {
+  let cat_map = map.get(reg.entries, category) ?? map.new()
+  let rev_map = map.get(reg.reverse, category) ?? map.new()
+  {
+    entries: map.set(reg.entries, category, map.set(cat_map, id, name)),
+    reverse: map.set(reg.reverse, category, map.set(rev_map, name, id)),
+  }
+}
+
+fn name_of(reg: Registry, category: String, id: Int) -> Option[String] =
+  match map.get(reg.entries, category) {
+    some(cat) => map.get(cat, id),
+    none => none,
+  }
+
+fn id_of(reg: Registry, category: String, name: String) -> Option[Int] =
+  match map.get(reg.reverse, category) {
+    some(cat) => map.get(cat, name),
+    none => none,
+  }
+
+fn register_many(reg: Registry, category: String, entries: List[(Int, String)]) -> Registry =
+  list.fold(entries, reg, (r, entry) => { let (id, name) = entry; register(r, category, id, name) })
+
+fn from_json(category: String, data: Value) -> Registry = {
+  let arr = value.as_array(data) ?? []
+  list.fold(arr, new(), (reg, item) => {
+    let id = value.as_int(value.get(item, "id") ?? value.null()) ?? -1
+    let name = value.as_string(value.get(item, "name") ?? value.null()) ?? ""
+    if id >= 0 and string.len(name) > 0 then register(reg, category, id, name)
+    else reg
+  })
+}
+
+fn merge(a: Registry, b: Registry) -> Registry = {
+  let entries = map.fold(b.entries, a.entries, (acc, k, v) => {
+    let existing = map.get(acc, k) ?? map.new()
+    map.set(acc, k, map.fold(v, existing, (m, id, name) => map.set(m, id, name)))
+  })
+  let reverse = map.fold(b.reverse, a.reverse, (acc, k, v) => {
+    let existing = map.get(acc, k) ?? map.new()
+    map.set(acc, k, map.fold(v, existing, (m, name, id) => map.set(m, name, id)))
+  })
+  { entries: entries, reverse: reverse }
+}
+
+fn categories(reg: Registry) -> List[String] = map.keys(reg.entries)
+
+fn count(reg: Registry, category: String) -> Int =
+  match map.get(reg.entries, category) { some(cat) => list.len(map.keys(cat)), none => 0 }
+
+// ── Tests ───────────────────────────────────────────
+
+test "register and lookup" {
+  var reg = new()
+  reg = register(reg, "block", 1, "minecraft:stone")
+  reg = register(reg, "block", 2, "minecraft:grass_block")
+  assert_eq(name_of(reg, "block", 1) ?? "", "minecraft:stone")
+  assert_eq(name_of(reg, "block", 2) ?? "", "minecraft:grass_block")
+  assert_eq(id_of(reg, "block", "minecraft:stone") ?? -1, 1)
+}
+
+test "register many" {
+  let reg = register_many(new(), "item", [(256, "minecraft:iron_shovel"), (257, "minecraft:iron_pickaxe")])
+  assert_eq(name_of(reg, "item", 256) ?? "", "minecraft:iron_shovel")
+  assert_eq(count(reg, "item"), 2)
+}
+
+test "not found returns none" {
+  let reg = new()
+  assert_eq(name_of(reg, "block", 999), none)
+  assert_eq(id_of(reg, "block", "missing"), none)
+}
+
+test "merge registries" {
+  let a = register(new(), "block", 1, "stone")
+  let b = register(new(), "item", 10, "sword")
+  let merged = merge(a, b)
+  assert_eq(name_of(merged, "block", 1) ?? "", "stone")
+  assert_eq(name_of(merged, "item", 10) ?? "", "sword")
+}
+
+test "from_json" {
+  let data = value.array([
+    value.object([("id", value.int(0)), ("name", value.str("air"))]),
+    value.object([("id", value.int(1)), ("name", value.str("stone"))]),
+  ])
+  let reg = from_json("block", data)
+  assert_eq(name_of(reg, "block", 0) ?? "", "air")
+  assert_eq(name_of(reg, "block", 1) ?? "", "stone")
+}
