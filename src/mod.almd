@@ -99,8 +99,8 @@ test "merge registries" {
 
 test "from_json" {
   let data = value.array([
-    value.object([("id", value.int(0)), ("name", value.str("air"))]),
-    value.object([("id", value.int(1)), ("name", value.str("stone"))]),
+    value.object([("id", value.int(0)), ("name", value.string("air"))]),
+    value.object([("id", value.int(1)), ("name", value.string("stone"))]),
   ])
   let reg = from_json("block", data)
   assert_eq(name_of(reg, "block", 0) ?? "", "air")
