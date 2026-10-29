@@ -1,5 +1,3 @@
-import json
-
 // Minecraft Registry: ID ↔ name mapping for blocks, items, entities, etc.
 //
 // Usage:
@@ -50,13 +48,13 @@ fn from_json(category: String, data: Value) -> Registry = {
 }
 
 fn merge(a: Registry, b: Registry) -> Registry = {
-  let entries = map.fold(b.entries, a.entries, (acc, k, v) => {
+  let entries = map.fold(b.entries, a.entries, (acc, (k, v)) => {
     let existing = map.get(acc, k) ?? map.new()
-    map.set(acc, k, map.fold(v, existing, (m, id, name) => map.set(m, id, name)))
+    map.set(acc, k, map.fold(v, existing, (m, (id, name)) => map.set(m, id, name)))
   })
-  let reverse = map.fold(b.reverse, a.reverse, (acc, k, v) => {
+  let reverse = map.fold(b.reverse, a.reverse, (acc, (k, v)) => {
     let existing = map.get(acc, k) ?? map.new()
-    map.set(acc, k, map.fold(v, existing, (m, name, id) => map.set(m, name, id)))
+    map.set(acc, k, map.fold(v, existing, (m, (name, id)) => map.set(m, name, id)))
   })
   { entries: entries, reverse: reverse }
 }
